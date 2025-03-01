@@ -74,7 +74,7 @@ def main():
                     default=None,
                     help='The physionet database directory to read the source waveform from')
     ap.add_argument('--save_output_to_log', '-l',
-                    default=False,
+                    action='store_true',
                     help='Save all of the benchmarking results to a log file')
     ap.add_argument('--waveform_suite_table', '-s',
                     default=None,
@@ -88,6 +88,9 @@ def main():
     ap.add_argument('--memory_profiling', '-m',
                     default=False, type=bool, action=argparse.BooleanOptionalAction,
                     help='Run memory profiling on the benchmarking process')
+    ap.add_argument('--verbose', '-v',
+                    action='store_true',
+                    help='Add additional information to output')
     opts = ap.parse_args()
 
     # If log is requested send the output there
@@ -121,7 +124,8 @@ def main():
                                                                                 test_list=test_list,
                                                                                 result_list=result_list,
                                                                                 test_only = opts.test_only,
-                                                                                mem_profile = opts.memory_profiling)
+                                                                                mem_profile = opts.memory_profiling,
+                                                                                verbose = opts.verbose)
 
         save_summary(format_list, waveform_list, test_list, result_list, opts.waveform_suite_summary_file)
 
@@ -131,7 +135,8 @@ def main():
                        format_class=opts.format_class,
                        pn_dir=opts.physionet_directory,
                        test_only = opts.test_only,
-                       mem_profile = opts.memory_profiling)
+                       mem_profile = opts.memory_profiling,
+                       verbose = opts.verbose)
 
     # Close the log file after the run is complete
     if opts.save_output_to_log:

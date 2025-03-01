@@ -81,11 +81,7 @@ def __read_rand_channel(reader, opened, total_length, channels, block_length, bl
     for j in range(block_count):
         t0 = rng.random() * (total_length - block_length)
         t1 = t0 + block_length
-        if rand_channel:
-            c = rng.choice(channels)
-            reader.read_opened_waveforms(opened, t0, t1, [c])
-        else:
-            reader.read_opened_waveforms(opened, t0, t1, channels)
+        reader.read_opened_waveforms(opened, t0, t1, channels)
 
 
 # reads random channel and random block, opening file(s) once.
@@ -100,11 +96,10 @@ def _run_read_test_opened_rand_channel(fmt, path, total_length, all_channels, bl
     read_mem_usages = []
     close_mem_usages = []
 
-    if (not rand_channel) and test1ch:
+    if test1ch:
         channels = [r.choice(all_channels)]
     else:
         channels = all_channels
-    rand_channel = test1ch and rand_channel
 
     for i in repeat_test(test_min_dur, test_min_iter):
         # open
@@ -175,7 +170,7 @@ def compute_snr(reference_signal, output_signal):
 def print_header(mem_profile: bool = False, with_ops: bool = False):
     ops = "OP    " if with_ops else ""
     if (mem_profile):
-        print('%s #seek  #read      KiB   CPU(s)    Wall(s)    Mem(MB)(used/maxrss/malloced)       [N]' % ops)
+        print('%s #seek  #read      KiB   CPU(s)    Wall(s)    Mem(MB)(used/maxrss/malloced)      [N]' % ops)
     else:
         print('%s #seek  #read      KiB   CPU(s)    Wall(s)        [N]' % ops)
 
@@ -183,7 +178,7 @@ def print_header(mem_profile: bool = False, with_ops: bool = False):
 def print_results(op_str: str, channels: str, counters, mem_usages, block_count, block_length,
                   mem_profile: bool = False):
     if (mem_profile):
-        print('%s%6.0f %6.0f %8.0f %8.4f   %8.4f     %8.4f/%8.4f/%8.4f    %6s open %d x %.0fs, %s'
+        print('%s%6.0f %6.0f %8.0f %8.4f  %8.4f     %8.4f/%8.4f/%8.4f      %6s open %d x %.0fs, %s'
               % (op_str,
                  median_attr(counters, 'n_seek_calls'),
                  median_attr(counters, 'n_read_calls'),
@@ -210,10 +205,75 @@ def print_results(op_str: str, channels: str, counters, mem_usages, block_count,
                  block_count,
                  block_length,
                  channels))
+        
+def print_sum_results(op_str: str, channels: str, open_counters, open_mem_usages, 
+                      read_counters, read_mem_usages, close_counters, close_mem_usages, 
+                      block_count, block_length, mem_profile: bool = False):
+    """
+    Print the sum of the open, read, close tests for the open once read many test.
+    """
+    if (mem_profile):
+        print('%s%6.0f %6.0f %8.0f %8.4f  %8.4f     %8.4f/%8.4f/%8.4f      %6s open %d x %.0fs, %s'
+              % (op_str,
+                 median_attr(open_counters, 'n_seek_calls') + 
+                 median_attr(read_counters, 'n_seek_calls') + 
+                 median_attr(close_counters, 'n_seek_calls'),
+                 median_attr(open_counters, 'n_read_calls') + 
+                 median_attr(read_counters, 'n_read_calls') + 
+                 median_attr(close_counters, 'n_read_calls'),
+                 median_attr(open_counters, 'n_bytes_read') / 1024 + 
+                 median_attr(read_counters, 'n_bytes_read') / 1024 + 
+                 median_attr(close_counters, 'n_bytes_read') / 1024,
+                 median_attr(open_counters, 'cpu_seconds') + 
+                 median_attr(read_counters, 'cpu_seconds') + 
+                 median_attr(close_counters, 'cpu_seconds'),
+                 median_attr(open_counters, 'walltime') + 
+                 median_attr(read_counters, 'walltime') + 
+                 median_attr(close_counters, 'walltime'),
+                 # walltime / len(counters),
+                 np.median(open_mem_usages) 
+                 + np.median(read_mem_usages) 
+                 + np.median(close_mem_usages),
+                 median_attr(open_counters, 'max_rss') 
+                 + median_attr(read_counters, 'max_rss') 
+                 + median_attr(close_counters, 'max_rss'),
+                 median_attr(open_counters, 'malloced') 
+                 + median_attr(read_counters, 'malloced') 
+                 + median_attr(close_counters, 'malloced'),
+                 '[%d]' % (len(open_counters) 
+                           + len(close_counters) 
+                           + len(read_counters)),
+                 block_count,
+                 block_length,
+                 channels))
+    else:
+        print('%s%6.0f %6.0f %8.0f %8.4f   %8.4f     %6s open %d x %.0fs, %s'
+              % (op_str,
+                 median_attr(open_counters, 'n_seek_calls') 
+                 + median_attr(read_counters, 'n_seek_calls') 
+                 + median_attr(close_counters, 'n_seek_calls'),
+                 median_attr(open_counters, 'n_read_calls') 
+                 + median_attr(read_counters, 'n_read_calls') 
+                 + median_attr(close_counters, 'n_read_calls'),
+                 median_attr(open_counters, 'n_bytes_read') / 1024 
+                 + median_attr(read_counters, 'n_bytes_read') / 1024 
+                 + median_attr(close_counters, 'n_bytes_read') / 1024,
+                 median_attr(open_counters, 'cpu_seconds') 
+                 + median_attr(read_counters, 'cpu_seconds') 
+                 + median_attr(close_counters, 'cpu_seconds'),
+                 median_attr(open_counters, 'walltime') 
+                 + median_attr(read_counters, 'walltime') 
+                 + median_attr(close_counters, 'walltime'),
+                 '[%d]' % (len(open_counters) 
+                           + len(read_counters) 
+                           + len(close_counters)),
+                 block_count,
+                 block_length,
+                 channels))
 
 
 def run_benchmarks(input_record, format_class, pn_dir=None, format_list=None, waveform_list=None, test_list=None,
-                   result_list=None, mem_profile=False, test_only=False):
+                   result_list=None, mem_profile=False, test_only=False, verbose=False):
     # Load the class we will be testing
     module_name, class_name = format_class.rsplit('.', 1)
     module = importlib.import_module(module_name)
@@ -470,6 +530,7 @@ def run_benchmarks(input_record, format_class, pn_dir=None, format_list=None, wa
                 print('Open Once Read Many performance (median of N trials):')
                 print_header(mem_profile=mem_profile, with_ops=True)
 
+                # Run open once, read many test across all channels in a waveform record
                 for block_length, block_count in TEST_BLOCK_LENGTHS:
 
                     # time1 = time.time()
@@ -479,78 +540,56 @@ def run_benchmarks(input_record, format_class, pn_dir=None, format_list=None, wa
                                                             rand_channel = True, test1ch = False, mem_profile = mem_profile)
                     # walltime = time.time() - time1
 
-                    print_results("open  ", "all channels", open_counters, open_mem_usages,
-                                  block_count, block_length, mem_profile = mem_profile)
+                    # Capture the individual open, read, close performance measurements
+                    if verbose:
+                        print_results("open  ", "all channels", open_counters, open_mem_usages,
+                                    block_count, block_length, mem_profile = mem_profile) 
+                        print_results("read  ", "all channels",
+                                    read_counters, read_mem_usages, block_count, block_length, mem_profile = mem_profile)
+                        print_results("close ", "all channels",
+                                    close_counters, close_mem_usages, block_count, block_length, mem_profile = mem_profile)
 
-                    if format_list is not None:
-                        # Append open time result
-                        format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_all_open',
-                                                                                        median_attr(open_counters, 'cpu_seconds'),
-                                                                                        format_list,
-                                                                                        waveform_list, test_list,
-                                                                                        result_list)
+                        # Save the results to be used in a summary file 
+                        if format_list is not None:
+                            # Append open time result
+                            format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
+                                                                                            f'{block_count}_all_open',
+                                                                                            median_attr(open_counters, 'cpu_seconds'),
+                                                                                            format_list,
+                                                                                            waveform_list, test_list,
+                                                                                            result_list)
+                        if format_list is not None:
+                            # Append read time result
+                            format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
+                                                                                            f'{block_count}_all_read',
+                                                                                            median_attr(read_counters, 'cpu_seconds'),
+                                                                                            format_list,
+                                                                                            waveform_list, test_list,
+                                                                                            result_list)
+                        if format_list is not None:
+                            # Append close time result
+                            format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
+                                                                                            f'{block_count}_all_close',
+                                                                                            median_attr(close_counters, 'cpu_seconds'),
+                                                                                            format_list,
+                                                                                            waveform_list, test_list,
+                                                                                            result_list)
 
-                    print_results("read  ", "all channels",
-                                  read_counters, read_mem_usages, block_count, block_length, mem_profile = mem_profile)
-
+                    # Print the sum of the open, read, close results from the open once,
+                    # read many test 
+                    print_sum_results("total ", "all channels", open_counters, open_mem_usages, read_counters, read_mem_usages, 
+                                            close_counters, close_mem_usages, block_count, block_length, mem_profile = mem_profile)
+                     
                     if format_list is not None:
                         # Append read time result
                         format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_all_read',
-                                                                                        median_attr(read_counters, 'cpu_seconds'),
+                                                                                        f'{block_count}_all_total',
+                                                                                        median_attr(open_counters, 'cpu_seconds') + median_attr(read_counters, 'cpu_seconds') + median_attr(close_counters, 'cpu_seconds'),
                                                                                         format_list,
                                                                                         waveform_list, test_list,
                                                                                         result_list)
 
-                    print_results("close ", "all channels",
-                                  close_counters, close_mem_usages, block_count, block_length, mem_profile = mem_profile)
-
-                    if format_list is not None:
-                        # Append close time result
-                        format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_all_close',
-                                                                                        median_attr(close_counters, 'cpu_seconds'),
-                                                                                        format_list,
-                                                                                        waveform_list, test_list,
-                                                                                        result_list)
-                for block_length, block_count in TEST_BLOCK_LENGTHS:
-                    open_counters, open_mem_usages, read_counters, read_mem_usages, close_counters, close_mem_usages = \
-                        _run_read_test_opened_rand_channel(fmt, path, total_length, all_channels, block_length, block_count,
-                                                            test_min_dur = TEST_MIN_DURATION, test_min_iter = TEST_MIN_ITERATIONS,
-                                                            rand_channel = True, test1ch = True, mem_profile = mem_profile)
-
-                    print_results("open  ", "rand channel",
-                                  open_counters, open_mem_usages, block_count, block_length, mem_profile = mem_profile)
-
-                    if format_list:
-                        format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_one_open_rand',
-                                                                                        median_attr(open_counters, 'cpu_seconds'),
-                                                                                        format_list,
-                                                                                        waveform_list, test_list,
-                                                                                        result_list)
-
-                    print_results("read  ", "rand channel",
-                                  read_counters, read_mem_usages, block_count, block_length, mem_profile = mem_profile)
-                    if format_list:
-                        format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_one_read_rand',
-                                                                                        median_attr(read_counters, 'cpu_seconds'),
-                                                                                        format_list,
-                                                                                        waveform_list, test_list,
-                                                                                        result_list)
-
-                    print_results("close ", "rand channel", close_counters, close_mem_usages, block_count, block_length, mem_profile = mem_profile)
-                    if format_list:
-                        format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_one_close_rand',
-                                                                                        median_attr(close_counters, 'cpu_seconds'),
-                                                                                        format_list,
-                                                                                        waveform_list, test_list,
-                                                                                        result_list)
-
-
+                # Run open once, read many test across one channels in a waveform record
                 for block_length, block_count in TEST_BLOCK_LENGTHS:
 
                     # time1 = time.time()
@@ -560,35 +599,49 @@ def run_benchmarks(input_record, format_class, pn_dir=None, format_list=None, wa
                                                             rand_channel = False, test1ch = True, mem_profile = mem_profile)
                     # walltime = time.time() - time1
 
-                    print_results("open  ", "one channel", open_counters, open_mem_usages, block_count, block_length, mem_profile = mem_profile)
+                    # Capture the individual open, read, close performance measurements
+                    if verbose:
+                        print_results("open  ", "one channel", open_counters, open_mem_usages, block_count, block_length, mem_profile = mem_profile)
+                        print_results("read  ", "one channel", read_counters, read_mem_usages, block_count, block_length, mem_profile = mem_profile)
+                        print_results("close ", "one channel", close_counters, close_mem_usages, block_count, block_length, mem_profile = mem_profile)
 
-                    if format_list is not None:
-                        # Append open time result
-                        format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_one_open_fixed',
-                                                                                        median_attr(open_counters, 'cpu_seconds'),
-                                                                                        format_list,
-                                                                                        waveform_list, test_list,
-                                                                                        result_list)
-
-                    print_results("read  ", "one channel", read_counters, read_mem_usages, block_count, block_length, mem_profile = mem_profile)
-
+                        # Save the results to be used in a summary file 
+                        if format_list is not None:
+                            # Append open time result
+                            format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
+                                                                                            f'{block_count}_one_open_fixed',
+                                                                                            median_attr(open_counters, 'cpu_seconds'),
+                                                                                            format_list,
+                                                                                            waveform_list, test_list,
+                                                                                            result_list)
+                        if format_list is not None:
+                            # Append read time result
+                            format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
+                                                                                            f'{block_count}_one_read_fixed',
+                                                                                            median_attr(read_counters, 'cpu_seconds'),
+                                                                                            format_list,
+                                                                                            waveform_list, test_list,
+                                                                                            result_list)
+                        if format_list is not None:
+                            # Append close time result
+                            format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
+                                                                                            f'{block_count}_one_close_fixed',
+                                                                                            median_attr(close_counters, 'cpu_seconds'),
+                                                                                            format_list,
+                                                                                            waveform_list, test_list,
+                                                                                            result_list)
+                    
+                    # Print the sum of the open, read, close results from the open once,
+                    # read many test     
+                    print_sum_results("total ", "one channel", open_counters, open_mem_usages, read_counters, read_mem_usages, 
+                            close_counters, close_mem_usages, block_count, block_length, mem_profile = mem_profile)
+                    
+                    # Save the results to be used in a summary file
                     if format_list is not None:
                         # Append read time result
                         format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_one_read_fixed',
-                                                                                        median_attr(read_counters, 'cpu_seconds'),
-                                                                                        format_list,
-                                                                                        waveform_list, test_list,
-                                                                                        result_list)
-
-                    print_results("close ", "one channel", close_counters, close_mem_usages, block_count, block_length, mem_profile = mem_profile)
-
-                    if format_list is not None:
-                        # Append close time result
-                        format_list, waveform_list, test_list, result_list = append_result(format_class, input_record,
-                                                                                        f'{block_count}_one_close_fixed',
-                                                                                        median_attr(close_counters, 'cpu_seconds'),
+                                                                                        f'{block_count}_one_total',
+                                                                                        median_attr(open_counters, 'cpu_seconds') + median_attr(read_counters, 'cpu_seconds') + median_attr(close_counters, 'cpu_seconds'),
                                                                                         format_list,
                                                                                         waveform_list, test_list,
                                                                                         result_list)
